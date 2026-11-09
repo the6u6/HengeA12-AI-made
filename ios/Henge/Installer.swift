@@ -202,15 +202,26 @@ final class Installer: NSObject, ObservableObject {
             throw message("Turn on JIT first: the installer runs the Mac's own restore system, which needs it."
                           + (JITBootstrap.lastFailure.map { " " + $0 } ?? ""))
         }
-        // The restore needs 2 GB, whatever the Mac is set to use afterwards, and never more than this device can
-        // spare (Device.restoreRAMCeilingMB): the restore system caches the ~15 GB it writes, so it fills all the
-        // memory it is given, and a large guest on a small phone stalls the whole device and gets Henge killed
-        // mid-install, with no crash report.
+        // The restore needs about 1.5 GB, whatever the Mac is set to use afterwards, and never more than
+        // this device can spare (Device.restoreRAMCeilingMB): the restore system caches the ~15 GB it
+        // writes, so it fills all the memory it is given, and a larger guest on a small phone is killed
+        // mid-install when the guest, Henge and iOS do not fit in the phone's RAM together.
         var restoring = mac
-        restoring.ramMB = min(max(mac.ramMB, 2048), Device.restoreRAMCeilingMB)
-        HengeLog.log("install", "restore RAM \(restoring.ramMB) MB (Mac asks \(mac.ramMB))")
-        let ram = GuestMemory.prepare(restoring, pageable: Device.veryTightRAM)
-        guard ram >= 2048 else { throw message("Installing needs a few more GB of free storage for the Mac's memory.") }
+        restoring.ramMB = min(max(mac.ramMB, Device.restoreRAMFloorMB), Device.restoreRAMCeilingMB)
+        // henge-env.txt can override the size (HV_RESTORE_RAM=1024), rounded down to 512 MB: a phone
+        // whose restore kernel needs less, or one where the default is killed for memory, can be tried
+        // without a rebuild. The install below checks that this much was actually available.
+        var overridden = false
+        if let c = getenv("HV_RESTORE_RAM"), let mb = Int(String(cString: c)), mb >= 512 {
+            restoring.ramMB = mb / 512 * 512
+            overridden = true
+        }
+        HengeLog.log("install", "restore RAM \(restoring.ramMB) MB (Mac asks \(mac.ramMB)"
+                      + (overridden ? ", HV_RESTORE_RAM" : "") + ")")
+        let ram = GuestMemory.prepare(restoring)
+        guard ram >= UInt64(restoring.ramMB) else {
+            throw message("Installing needs a few more GB of free storage for the Mac's memory.")
+        }
         setenv("HV_WRITE_CACHE", "0", 1) // the ~15 GB the restore writes goes straight to storage (host/disk.c); this process runs no other Mac
         let work = mac.directory.appendingPathComponent("restore", isDirectory: true)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)

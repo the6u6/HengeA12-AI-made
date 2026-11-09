@@ -33,14 +33,16 @@ Every change keeps its original author in the git history.
 - **Smaller devices** suggest 3 GB for a new Mac on a 3 GB iPhone, and an install no longer
   gives the restore system all of it. The restore fills whatever RAM it is given (it caches the
   ~15 GB it writes), so on a 3 GB iPhone the old 4 GB cap left nothing for iOS: the phone started
-  paging and iOS killed Henge at the start of "Write macOS" with no crash report. The restore now
-  gets 2 GB there (2.5 GB on 4 GB phones, 3 GB on 6 GB phones, 4 GB from 8 GB up) and the code
-  region is 512 MB on 3/4 GB phones. On those phones the restore guest's RAM is placed in a file
-  that iOS can write back and drop: the 2 GB guest, Henge and iOS do not fit together as anonymous
-  pages, and installs were killed about 10% into "Write macOS" once the guest had touched almost
-  all of its RAM. Prefault is off. A Mac launched afterwards keeps the engine's default backing.
-  The install logs process memory every 10 s and iOS's memory warnings, so a memory kill can be
-  told from a crash.
+  paging and iOS killed Henge at the start of "Write macOS" with no crash report. That phone now
+  gives the restore 1.5 GB (2.5 GB on 4 GB phones, 3 GB on 6 GB phones, 4 GB from 8 GB up) and the
+  code region is 512 MB on 3/4 GB phones. 2 GB was still killed about 10% into "Write macOS", and
+  putting the guest's RAM in a file so iOS could write it back and drop it made the restore kernel
+  stop a few seconds into boot instead: it prints the Apple logo and the AES setup lines, then
+  nothing, and the five-minute wait for restore mode expires with the host still alive. Guest RAM
+  therefore stays anonymous (outside Henge's footprint) and the RAM file is only the engine's
+  fallback. `HV_RESTORE_RAM` in `Documents/henge-env.txt` overrides the size (rounded down to
+  512 MB) for one phone without a rebuild. The install logs process memory every 10 s and iOS's
+  memory warnings, so a memory kill can be told from a crash.
 - **Restore-mode timeout.** idevicerestore waits 30 seconds for the device to leave recovery mode
   after the kernelcache is sent, while the emulated Mac's restore kernel takes longer than a real
   iPhone's to take over and re-enumerate. The install failed with "Failed to place device in restore

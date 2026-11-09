@@ -46,15 +46,20 @@ enum Device {
     /// The most RAM the restore system may get, in MB.
     ///
     /// The restore fills all the memory it is given (it caches the ~15 GB it writes), and Henge holds
-    /// its JIT region beside it. On a small phone the old 4 GB cap leaves nothing for iOS: the whole
-    /// device starts paging, and iOS kills Henge mid-install with no crash report. The restore only
-    /// needs 2 GB, so that is what a 3 GB iPhone gets; larger phones keep enough room for iOS.
+    /// its JIT region beside it. On a 3 GB phone even 2 GB leaves nothing for iOS: the guest's pages
+    /// become resident as it fills them, the whole device starts paging, and iOS kills Henge 10% into
+    /// "Write macOS" with no crash report. That phone therefore gives the restore 1.5 GB; larger phones
+    /// keep enough room for iOS. Backing those pages with a file (so iOS can drop them) is not an
+    /// option: the restore kernel then stops a few seconds into boot and never takes over from iBoot.
     static var restoreRAMCeilingMB: Int {
-        if physicalRAMMB < 3_500 { return 2048 } // 3 GB phones
+        if physicalRAMMB < 3_500 { return 1536 } // 3 GB phones
         if physicalRAMMB < 5_500 { return 2560 } // 4 GB phones
         if physicalRAMMB < 7_500 { return 3072 } // 6 GB phones
         return 4096
     }
+
+    /// The least RAM the restore system gets, in MB (Installer.install).
+    static var restoreRAMFloorMB: Int { physicalRAMMB < 3_500 ? 1536 : 2048 }
 
     /// A 3 or 4 GB phone, where even the code region has to be smaller.
     static var veryTightRAM: Bool { physicalRAMMB < 5_500 }
@@ -62,7 +67,7 @@ enum Device {
     /// The choices for a Mac's memory, in GB.
     static let memoryChoices = 1...16
 
-    /// What a choice risks on this device, if anything. An install always gets at least 2 GB (Installer.install).
+    /// What a choice risks on this device, if anything. An install always gets at least 1.5 GB (Installer.install).
     static func memoryNote(_ gb: Int) -> String? {
         if gb < 4 { return "macOS has little room under 4 GB, so it can be very slow." }
         if gb > suggestedRAMGB { return "More than \(suggestedRAMGB) GB is a lot for this \(name): iOS may close Henge when macOS gets busy." }

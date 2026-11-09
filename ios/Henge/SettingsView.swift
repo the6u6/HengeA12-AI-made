@@ -76,7 +76,7 @@ struct SettingsView: View {
                     Toggle("Superblocks (experimental)", isOn: $superblocks)
                     if Device.veryTightRAM {
                         HengeLabeledContent("Code cache", value: "512 MB")
-                        Text("A phone with 3 or 4 GB keeps the code cache small: the region stays held while a Mac runs, and a restore needs 2 GB of guest RAM beside it.")
+                        Text("A phone with 3 or 4 GB keeps the code cache small: the region stays held while a Mac runs, and a restore needs 1.5 GB of guest RAM beside it.")
                             .font(.footnote).foregroundStyle(.secondary)
                     } else {
                         Picker("Code cache", selection: $codeCacheMB) {

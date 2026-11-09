@@ -34,22 +34,13 @@ struct VirtualMac: Identifiable, Codable, Hashable {
 enum GuestMemory {
     /// Points the engine at the file (it is unlinked as soon as it is open) and returns the size that fits.
     ///
-    /// - Parameter pageable: keep the guest's RAM in the file even when the footprint-free allocation
-    ///   would be accepted. An install needs that: the restore system caches the images it writes and
-    ///   fills all the RAM it is given, and on a 3 GB phone the 2 GB guest, Henge and iOS do not fit
-    ///   together. Anonymous pages cannot be written out, so iOS kills Henge mid-install; a file's
-    ///   pages are written back and dropped. Prefaulting is off with it, because dirtying the whole
-    ///   guest at once is the spike that gets Henge killed before the install even starts.
-    static func prepare(_ mac: VirtualMac, pageable: Bool = false) -> UInt64 {
+    /// The engine first asks for RAM the memory limit does not count (anonymous, `alloc_no_footprint`)
+    /// and only falls back to this file. Guest RAM is never forced into the file: those pages are
+    /// pageable then, and the restore kernel stops a few seconds into boot (after the Apple logo and
+    /// the AES setup lines) and never takes over from iBoot, however long the host waits.
+    static func prepare(_ mac: VirtualMac) -> UInt64 {
         let file = mac.directory.appendingPathComponent("ram.tmp")
         setenv("HV_RAM_FILE", file.path, 1)
-        if pageable {
-            setenv("HV_RAM_NO_LEDGER", "1", 1)
-            setenv("HV_RAM_NO_PREFAULT", "1", 1)
-        } else {
-            unsetenv("HV_RAM_NO_LEDGER") // a Mac launched later keeps the engine's default backing
-            unsetenv("HV_RAM_NO_PREFAULT")
-        }
         let free = (try? mac.directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? 0
         let room = free > 0 ? UInt64(max(free - (2 << 30), 0)) >> 20 : UInt64.max
