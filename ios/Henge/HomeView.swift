@@ -19,7 +19,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(spacing: 14) {
                     notices
@@ -41,7 +41,6 @@ struct HomeView: View {
             }
             .background(Desk.page)
             .navigationTitle("Henge")
-            .navigationDestination(for: VirtualMac.self) { MacSettingsView(mac: $0) }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -63,6 +62,7 @@ struct HomeView: View {
                 }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 
     @ViewBuilder private var notices: some View {
@@ -160,7 +160,7 @@ private struct MacHero: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NavigationLink(value: mac) {
+            NavigationLink(destination: MacSettingsView(mac: mac)) {
                 VStack(spacing: 0) {
                     preview
                     HStack {

@@ -18,8 +18,8 @@ if [ "$1" = mac ]; then
 else
     BUILD="$ROOT/build/ios"
     SDKNAME=iphoneos
-    CC=(xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=17.0)
-    CMAKE_TARGET=(-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0)
+    CC=(xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0)
+    CMAKE_TARGET=(-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0)
 fi
 OUT="$BUILD/restore"
 DEPS="$BUILD/deps"

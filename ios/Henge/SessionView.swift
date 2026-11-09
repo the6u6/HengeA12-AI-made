@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import GameController
 
 /// A running Mac. Upright, its screen sits above a trackpad; on its side the screen fills the device
@@ -144,7 +145,7 @@ struct SessionView: View {
             .onChange(of: layout.shown) { shown = $0 }
         }
         .statusBarHidden(zoomed || Device.isPad)
-        .persistentSystemOverlays(.hidden)
+        .hengePersistentOverlaysHidden()
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showDetails) { details }
         .confirmationDialog("Shut down \(mac.name)?", isPresented: $confirmStop, titleVisibility: .visible) {
@@ -324,13 +325,29 @@ struct SessionView: View {
     }
 
     /// The system's paste button: iOS asks no permission for it, as it would if the app read the clipboard itself.
+    /// `PasteButton` is iOS 16; below it there is no per-paste prompt, so reading the clipboard is the same thing.
+    @ViewBuilder
     private var pasteTool: some View {
-        PasteButton(payloadType: String.self) { texts in
-            if let text = texts.first { Sharing.paste(text) }
+        if #available(iOS 16.0, *) {
+            PasteButton(payloadType: String.self) { texts in
+                if let text = texts.first { Sharing.paste(text) }
+            }
+            .labelStyle(.iconOnly)
+            .hengeCircleBorder()
+            .tint(Desk.raised)
+        } else {
+            Button {
+                if let text = UIPasteboard.general.string { Sharing.paste(text) }
+            } label: {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(Desk.text)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Paste")
+            .tint(Desk.raised)
         }
-        .labelStyle(.iconOnly)
-        .buttonBorderShape(.circle)
-        .tint(Desk.raised)
     }
 
     /// Hides the session's controls; three fingers on the screen bring them back. The first few times say so.
@@ -455,18 +472,18 @@ struct SessionView: View {
     }
 
     private var details: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 Section(phase) {
-                    LabeledContent("CPUs on", value: "\(cpusOn) of \(cpus)")
-                    LabeledContent("Temperature", value: Self.thermalLabel(thermalState))
-                    LabeledContent("Translated blocks", value: String(format: "%.1f M/s", blocksPerSecond / 1e6))
-                    LabeledContent("Network frames", value: "\(framesOut) out, \(framesIn) in")
-                    LabeledContent("Up", value: "\(Int(Date().timeIntervalSince(started))) s")
+                    HengeLabeledContent("CPUs on", value: "\(cpusOn) of \(cpus)")
+                    HengeLabeledContent("Temperature", value: Self.thermalLabel(thermalState))
+                    HengeLabeledContent("Translated blocks", value: String(format: "%.1f M/s", blocksPerSecond / 1e6))
+                    HengeLabeledContent("Network frames", value: "\(framesOut) out, \(framesIn) in")
+                    HengeLabeledContent("Up", value: "\(Int(Date().timeIntervalSince(started))) s")
                 }
                 Section("Display") {
                     Toggle("Color matching", isOn: $matchScreenColors)
-                    LabeledContent("Brightness", value: "\(Int(screenBrightness * 100))%")
+                    HengeLabeledContent("Brightness", value: "\(Int(screenBrightness * 100))%")
                     Slider(value: $screenBrightness, in: 0.4...1)
                     Text("Brightness dims only the Mac's screen.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -479,13 +496,13 @@ struct SessionView: View {
                     }
                     .pickerStyle(.segmented)
                     Toggle("Sharp edges", isOn: $sharpCursor)
-                    LabeledContent("Scroll speed", value: String(format: "%.1f×", scrollSpeed))
+                    HengeLabeledContent("Scroll speed", value: String(format: "%.1f×", scrollSpeed))
                     Slider(value: $scrollSpeed, in: 0.1...1.5)
                     Text("The Mac supplies a small pointer image. Enlarging it can look blurry; 1× is the sharpest on an iPad. Scroll speed changes apply immediately.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Sharing") {
-                    LabeledContent("Clipboard and folder", value: helperRunning ? "On" : "Not set up")
+                    HengeLabeledContent("Clipboard and folder", value: helperRunning ? "On" : "Not set up")
                     if !helperRunning {
                         Button("Type the Set Up Command") {
                             showDetails = false
@@ -529,6 +546,7 @@ struct SessionView: View {
             .navigationTitle("Details")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
         .preferredColorScheme(.dark)
     }
 

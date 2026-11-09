@@ -13,11 +13,16 @@
 /* System registers are named by op0:op1:CRn:CRm:op2, which is bits 20..5 of MRS/MSR. */
 #define R(op0, op1, crn, crm, op2) ((op0) << 14 | (op1) << 11 | (crn) << 7 | (crm) << 3 | (op2))
 
-/* ID registers: only features the translator handles. Host features are a
-   superset (Apple M1 and later), so copied instructions always exist. */
+/* ID registers: only features the translator handles. The host is at least
+   Armv8.4 (an A13 or M1), so only fields up to that are advertised; the two
+   Armv8.5 instructions macOS uses are emulated (SB is a NOP, FRINT32/64 a
+   helper), so copied instructions always exist on the host. */
 #define ID_AA64PFR0  0x1100000001110011ull /* EL0/EL1 AArch64, FP+AdvSIMD with FP16, GICv3 sysregs, CSV2, CSV3 */
 #define ID_AA64ISAR0 0x0011100110212120ull /* AES+PMULL, SHA1, SHA2/512, CRC32, LSE, RDM, SHA3, DotProd, FHM, FlagM */
-#define ID_AA64ISAR1 0x0000001110211011ull /* DPB, PAuth (no-op), JSCVT, FCMA, LRCPC2, PACGA, FRINTTS, SB */
+/* Not FRINTTS (bits 35:32) or SB (bits 39:36): both are Armv8.5, and the host may be an
+   A13 (Armv8.4). The translator NOPs SB and emulates FRINT32/64 in a helper (HV_OP_FRINT),
+   so the guest may still use them if it asks for them anyway. */
+#define ID_AA64ISAR1 0x0000000010211011ull /* DPB, PAuth (no-op), JSCVT, FCMA, LRCPC2, PACGA */
 #define ID_AA64MMFR0 0x0000000000100025ull /* 48-bit PA, 16-bit ASID, 4K/16K/64K granules */
 #define ID_AA64MMFR1 0x0000000000111000ull /* HPDS, LOR, PAN */
 #define ID_AA64DFR0  0x0000000000000006ull /* Armv8 debug, no PMU */

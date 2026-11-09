@@ -1551,12 +1551,25 @@ static int is_fp_insn(uint32_t insn) {
     return 0;
 }
 
+/* FRINT32Z/X and FRINT64Z/X are Armv8.5 (FEAT_FRINTTS): an A13 and older hosts
+   fault on them, so a helper does the work. Bit 22 picks single from double. */
+static int is_frint_insn(uint32_t insn) {
+    uint32_t opc = insn & 0xffbffc00u;
+    if (opc == 0x1e284000u || opc == 0x1e28c000u || opc == 0x1e294000u || opc == 0x1e29c000u) return 1;
+    opc = insn & 0xbfbffc00u;
+    return opc == 0x0e21e800u || opc == 0x2e21e800u || opc == 0x0e21f800u || opc == 0x2e21f800u;
+}
+
 /* Returns 1 if the instruction ends the block. */
 static int translate_one(Emit *e, uint32_t insn, uint64_t pc) {
     HvInsnKind kind = hv_classify(insn);
     if ((e->flags & HV_BLOCK_FPOFF) && kind != HV_INSN_UNDEFINED && is_fp_insn(insn)) {
         put_helper(e, pc, insn, HV_OP_FPTRAP);
         return 1;
+    }
+    if (kind == HV_INSN_COPY && is_frint_insn(insn)) {
+        put_helper(e, pc, insn, HV_OP_FRINT);
+        return 0;
     }
     switch (kind) {
     case HV_INSN_COPY:
@@ -1698,7 +1711,11 @@ static int translate_one(Emit *e, uint32_t insn, uint64_t pc) {
             else put_branch_exit(e, pc + 4, 0);
             return 1;
         }
-        put(e, insn); /* DSB, DMB, SB */
+        if (op2 == 7) { /* SB: Armv8.5, and A13 and older hosts fault on it. Here it is a NOP. */
+            put(e, 0xd503201fu);
+            return 0;
+        }
+        put(e, insn); /* DSB, DMB */
         return 0;
     }
     case HV_INSN_WAIT:

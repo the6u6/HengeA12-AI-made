@@ -4,6 +4,27 @@ This fork collects the fixes from the community forks of [Leviidev/Henge](https:
 into one build, with a few additions, aimed above all at iPad (tested hardware: iPad Pro M4).
 Every change keeps its original author in the git history.
 
+## Unreleased — A13 and iOS 15
+
+- **A13 support.** The virtual CPU no longer advertises the Armv8.5 `SB` and `FRINTTS`
+  extensions, which an A13 (Armv8.4) does not have and faulted on. The translator turns
+  `SB` into a NOP and emulates `FRINT32Z/X` and `FRINT64Z/X` in a helper, with the overflow
+  and FPSCR behaviour of the architecture. The chip gate now allows A13 (`iPhone12,x`,
+  `iPad12,x`) instead of requiring A14.
+- **iOS 15 floor.** The app, engine and restore libraries deploy to iOS 15.0 instead of 17.0.
+  The SwiftUI that needed 16/17 (`NavigationStack`, `NavigationLink(value:)`,
+  `LabeledContent`, `ShareLink`, `persistentSystemOverlays`, `scrollContentBackground`) is
+  replaced by the shims in `Henge/Compat15.swift`, and the external display scene compares
+  `UISceneSession.Role.rawValue` so it still works below iOS 16. On iOS 15 on A12 or newer,
+  install the `.tipa`: iOS refuses the `dynamic-codesigning` entitlement on those devices, so
+  the plain `.ipa` crashes when TrollStore launches it.
+- **Graphics.** macOS's Metal libraries are relabelled for iOS 15 (AIR 2.4, library
+  file 2.5, `air64_v24-apple-ios15.0.0`) instead of iOS 17, since the older Metal
+  runtime refuses a library built for a newer OS.
+- **Smaller devices** suggest 3 GB for a new Mac on a 3 GB iPhone.
+- CI takes the prebuilt iOS libraries from [Husk 15](https://github.com/the6u6/Husk15-AI-made),
+  built against an iOS 14 floor.
+
 ## 0.2.0 (100)
 
 Based on upstream `main` at b744a78.
@@ -64,5 +85,5 @@ Based on upstream `main` at b744a78.
 ## Building
 
 As upstream (see README): Xcode 27, `xcodegen`, `meson`, `rustup` with `aarch64-apple-ios`,
-and a built [Husk](https://github.com/Leviidev/Husk) at `~/Documents/Coding/Husk`. Only Husk's
+and a built [Husk 15](https://github.com/the6u6/Husk15-AI-made) at `~/Documents/Coding/Husk`. Only Husk's
 `build_ios.sh libffi glib libslirp` and `build_rppairing_ios.sh` are needed for Henge.

@@ -2,6 +2,7 @@
 
 #include <mach/mach.h>
 #include <mach/mach_time.h>
+#include <math.h>
 #include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -330,6 +331,130 @@ static int tlbi_may_hit(HvCpu *cpu, uint32_t insn, uint64_t pc) {
 
 static uint32_t helper(HvCpu *cpu, const HvHelperInfo *info_in);
 
+/* ---- FRINT32/64 (FEAT_FRINTTS) ----
+   Armv8.5 instructions. An A13 (and anything else before 8.5) has no such
+   encoding, so translated code calls this instead. Each rounds to an integer
+   that fits in 32 or 64 bits: Z rounds toward zero, X follows FPCR.RMode.
+   Overflow, NaN and infinity give INT{N}_MIN as a float and set FPSR.IOC; a
+   fractional input that rounds cleanly sets FPSR.IXC. The host's own rint()
+   uses FPCR too (the guest's stay live while it runs), but its inexact flag is
+   discarded and rebuilt here so an overflowing lane can revert only its own. */
+
+#define FPSR_IOC 0x1ull  /* invalid operation */
+#define FPSR_IXC 0x10ull /* inexact */
+
+static uint64_t fpsr_read(void) {
+    uint64_t fpsr;
+    __asm__ volatile("mrs %0, fpsr" : "=r"(fpsr));
+    return fpsr;
+}
+
+static void fpsr_write(uint64_t fpsr) {
+    __asm__ volatile("msr fpsr, %0" ::"r"(fpsr));
+}
+
+/* INT32_MIN or INT64_MIN as a single or double, the overflow result. */
+static uint32_t frint_overflow_f32(int intsize) {
+    return intsize == 64 ? 0xdf000000u : 0xcf000000u;
+}
+
+static uint64_t frint_overflow_f64(int intsize) {
+    return intsize == 64 ? 0xc3e0000000000000ull : 0xc1e0000000000000ull;
+}
+
+/* One finite single. Returns the rounded bit pattern, or the overflow one. */
+static uint32_t frint_f32(uint32_t bits, int intsize, int to_zero, int *invalid, int *inexact) {
+    if (((bits >> 23) & 0xff) == 0xff) { /* NaN or Inf */
+        *invalid = 1;
+        return frint_overflow_f32(intsize);
+    }
+    float f;
+    memcpy(&f, &bits, sizeof f);
+    double x = f;
+    double r = to_zero ? trunc(x) : rint(x);
+    int fraction = r != x;
+    double lo = intsize == 64 ? -0x1p63 : -0x1p31;
+    double hi = intsize == 64 ? 0x1p63 : 0x1p31;
+    if (r < lo || r >= hi) {
+        *invalid = 1; /* an overflow reverts this lane's inexact flag */
+        return frint_overflow_f32(intsize);
+    }
+    if (fraction) *inexact = 1;
+    float out = (float)r;
+    uint32_t o;
+    memcpy(&o, &out, sizeof o);
+    return o;
+}
+
+static uint64_t frint_f64(uint64_t bits, int intsize, int to_zero, int *invalid, int *inexact) {
+    if (((bits >> 52) & 0x7ff) == 0x7ff) { /* NaN or Inf */
+        *invalid = 1;
+        return frint_overflow_f64(intsize);
+    }
+    double x;
+    memcpy(&x, &bits, sizeof x);
+    double r = to_zero ? trunc(x) : rint(x);
+    int fraction = r != x;
+    double lo = intsize == 64 ? -0x1p63 : -0x1p31;
+    double hi = intsize == 64 ? 0x1p63 : 0x1p31;
+    if (r < lo || r >= hi) {
+        *invalid = 1; /* an overflow reverts this lane's inexact flag */
+        return frint_overflow_f64(intsize);
+    }
+    if (fraction) *inexact = 1;
+    uint64_t o;
+    memcpy(&o, &r, sizeof o);
+    return o;
+}
+
+/* Returns 0: the block carries on. */
+static uint32_t frint_emulate(HvCpu *cpu, uint32_t insn) {
+    uint64_t old_fpsr = fpsr_read();
+    int invalid = 0, inexact = 0;
+    int rd = insn & 0x1f, rn = (insn >> 5) & 0x1f;
+    uint32_t opc = insn & 0xffbffc00u; /* bit 22 (single/double) is not part of this */
+
+    if (opc == 0x1e284000u || opc == 0x1e28c000u || opc == 0x1e294000u || opc == 0x1e29c000u) {
+        int intsize = (opc == 0x1e294000u || opc == 0x1e29c000u) ? 64 : 32;
+        int to_zero = opc == 0x1e284000u || opc == 0x1e294000u;
+        if ((insn >> 22) & 1) { /* double */
+            cpu->v[rd] = (__uint128_t)frint_f64((uint64_t)cpu->v[rn], intsize, to_zero, &invalid, &inexact);
+        } else {
+            uint32_t bits = (uint32_t)cpu->v[rn];
+            cpu->v[rd] = (__uint128_t)frint_f32(bits, intsize, to_zero, &invalid, &inexact);
+        }
+    } else {
+        uint32_t vopc = insn & 0xbfbffc00u; /* bit 30 (Q) and bit 22 (size) are not part of this */
+        int intsize = (vopc == 0x0e21f800u || vopc == 0x2e21f800u) ? 64 : 32;
+        int to_zero = vopc == 0x0e21e800u || vopc == 0x0e21f800u;
+        int esz = (insn >> 22) & 1 ? 3 : 2; /* 2: 32-bit lanes, 3: 64-bit lanes */
+        int q = (insn >> 30) & 1;
+        __uint128_t src = cpu->v[rn], dst = 0;
+        if (esz == 2) {
+            int lanes = q ? 4 : 2;
+            for (int i = 0; i < lanes; i++) {
+                uint32_t bits = (uint32_t)(src >> (i * 32));
+                dst |= (__uint128_t)frint_f32(bits, intsize, to_zero, &invalid, &inexact) << (i * 32);
+            }
+        } else {
+            int lanes = q ? 2 : 1;
+            for (int i = 0; i < lanes; i++) {
+                uint64_t bits = (uint64_t)(src >> (i * 64));
+                dst |= (__uint128_t)frint_f64(bits, intsize, to_zero, &invalid, &inexact) << (i * 64);
+            }
+        }
+        cpu->v[rd] = dst;
+    }
+    /* Rebuild the flags from the lane results: this drops any inexact the host
+       rint() raised for a lane that then overflowed, which is what the
+       architecture asks for. */
+    uint64_t fpsr = old_fpsr;
+    if (inexact) fpsr |= FPSR_IXC;
+    if (invalid) fpsr |= FPSR_IOC;
+    fpsr_write(fpsr);
+    return 0;
+}
+
 uint32_t hv_helper(HvCpu *cpu, const HvHelperInfo *info_in) {
     uint32_t r = helper(cpu, info_in);
     /* An exception just taken (an abort, an undefined instruction, a trap): its
@@ -348,7 +473,7 @@ static uint32_t helper(HvCpu *cpu, const HvHelperInfo *info_in) {
     HvHelperInfo info_copy = *info_in;
     info_copy.op &= 0xff; /* the rest: hv_helper_thunk's refill flags */
     const HvHelperInfo *info = &info_copy;
-    if (info->op < 12 && cpu->m->stats_interval) cpu->m->stats.helper[info->op]++;
+    if (info->op < 13 && cpu->m->stats_interval) cpu->m->stats.helper[info->op]++;
     if (cpu->m->stats_interval && (info->op == HV_OP_MRS || info->op == HV_OP_MSR || info->op == HV_OP_SYS))
         reg_hist[(info->insn >> 5) & 0xffff] += info->op == HV_OP_MRS ? 1 : 1ull << 32;
     switch (info->op) {
@@ -395,6 +520,8 @@ static uint32_t helper(HvCpu *cpu, const HvHelperInfo *info_in) {
         return 1;
     case HV_OP_WFE:
         return wfe(cpu);
+    case HV_OP_FRINT:
+        return frint_emulate(cpu, info->insn);
     case HV_OP_UNDEF:
     default:
         hv_raise_undef(cpu, info->pc);

@@ -18,7 +18,7 @@ struct InstallView: View {
     @AppStorage("henge.cpus") private var cpus = 4
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(spacing: 0) {
                     switch installer.phase {
@@ -41,6 +41,7 @@ struct InstallView: View {
                 }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 
     // MARK: Choosing

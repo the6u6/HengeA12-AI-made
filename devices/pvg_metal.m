@@ -407,7 +407,7 @@ static MTLTextureDescriptor *descriptor_v2(const uint8_t *d) {
     if (hv_pvg_lite_task_read(lite, task, at, &h, sizeof h)) return nil;
     NSMutableData *lib = [NSMutableData dataWithLength:h.len];
     if (hv_pvg_lite_task_read(lite, task, h.off, lib.mutableBytes, h.len)) return nil;
-    /* iOS 17 refuses macOS's libraries as they are (a macOS 15 build, AIR 2.7): relabelled as iOS 17 ones
+    /* iOS 15 refuses macOS's libraries as they are (a macOS 15 build, AIR 2.7): relabelled as iOS 15 ones
        (devices/metallib.c), header first, then the bitcode's target too, it may load them. The stage that
        worked is tried first from then on. HV_PVG_NO_RELABEL: never. */
     static int start_stage = -1; /* 0: as sent; 1, 2: relabelled */
@@ -430,7 +430,7 @@ static MTLTextureDescriptor *descriptor_v2(const uint8_t *d) {
         library = [device newLibraryWithData:data error:&err];
         if (!library && !first_err) first_err = err;
         if (library && (stage != start_stage || (stage && first_err == nil && !getenv("HV_PVG_RELABEL_QUIET")))) {
-            [self complain:[NSString stringWithFormat:@"library: loaded relabelled for iOS 17 (stage %d; as sent: %@)", stage,
+            [self complain:[NSString stringWithFormat:@"library: loaded relabelled for iOS 15 (stage %d; as sent: %@)", stage,
                                                       first_err.localizedDescription ?: @"not tried"]];
             start_stage = stage;
         } else if (!library && stage) {

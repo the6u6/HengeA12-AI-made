@@ -44,10 +44,15 @@ jobs:
       # StikJIT.xcframework (vendored in Husk's repo, comes with checkout),
       # libhusk_rppairing.a (scripts/build_rppairing_ios.sh) and the
       # libslirp/glib/intl/pcre2 static libs (scripts/build_ios.sh).
+      # The6u6's Husk 15 fork builds those against an iOS 14 floor, which Henge's
+      # 15.0 app can link; upstream Husk's iOS 17 floor cannot.
       - name: Check out Husk
         uses: actions/checkout@v4
         with:
-          repository: Leviidev/Husk
+          repository: the6u6/Husk15-AI-made
+          # Pinned to the revision ci/build-bitrise.sh uses, so an update to the
+          # fork cannot change the prebuilt libraries under a Henge build.
+          ref: cac0dbdcca5d3de26c12bf565aa6cc4fedcecd02
           path: Husk
 
       - name: Cache Husk's sources and prebuilt iOS pieces
@@ -102,13 +107,20 @@ jobs:
       - name: Package Henge.ipa
         working-directory: Henge
         run: zsh ios/scripts/package_ipa.sh
-        # For a TrollStore build instead, use:
-        #   zsh ios/scripts/package_ipa.sh --trollstore
-        # which writes ~/Desktop/Henge.tipa instead.
 
-      - name: Upload Henge.ipa
+      # iOS 15 on A12 and newer refuses `dynamic-codesigning` in an app's
+      # signature, so the plain .ipa crashes when TrollStore installs it there.
+      # --trollstore strips that entitlement and writes Henge.tipa, which is the
+      # build an iOS 15 device installs.
+      - name: Package Henge.tipa (TrollStore)
+        working-directory: Henge
+        run: zsh ios/scripts/package_ipa.sh --trollstore
+
+      - name: Upload Henge builds
         uses: actions/upload-artifact@v4
         with:
           name: Henge-ipa-${{ github.sha }}
-          path: /Users/runner/Desktop/Henge.ipa
+          path: |
+            /Users/runner/Desktop/Henge.ipa
+            /Users/runner/Desktop/Henge.tipa
           if-no-files-found: error

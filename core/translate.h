@@ -24,6 +24,7 @@ enum {
     HV_OP_CLREX,
     HV_OP_WFI,
     HV_OP_WFE,         /* waits for the exclusive monitor's word to change (or a request); the block carries on */
+    HV_OP_FRINT,       /* FRINT32/64: Armv8.5, so A13 and older hosts emulate it */
 };
 
 #define HV_MAX_BLOCK_INSNS 128

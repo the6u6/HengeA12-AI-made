@@ -7,7 +7,8 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 HENGE_ROOT="${BITRISE_SOURCE_DIR:?Bitrise must set BITRISE_SOURCE_DIR}"
 HUSK_ROOT="$(dirname "$HENGE_ROOT")/Husk"
 STIKJIT_ROOT="$(dirname "$HENGE_ROOT")/StikJIT"
-HUSK_REV=afe83d45b31194c4cc9f7b3db7ec2c757db8346e
+HUSK_REPO=https://github.com/the6u6/Husk15-AI-made.git
+HUSK_REV=cac0dbdcca5d3de26c12bf565aa6cc4fedcecd02
 
 missing=()
 for tool in meson ninja pkg-config xcodegen cmake; do
@@ -25,7 +26,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 rustup default stable
 rustup target add aarch64-apple-ios
 
-git clone --depth 1 https://github.com/Leviidev/Husk.git "$HUSK_ROOT"
+git clone --depth 1 "$HUSK_REPO" "$HUSK_ROOT"
 git -C "$HUSK_ROOT" fetch --depth 1 origin "$HUSK_REV"
 git -C "$HUSK_ROOT" checkout --detach "$HUSK_REV"
 cd "$HUSK_ROOT"

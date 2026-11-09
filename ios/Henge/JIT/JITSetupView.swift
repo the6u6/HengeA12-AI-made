@@ -20,19 +20,18 @@ struct JITSetupFlow: View {
     private var device: String { OnDevicePairing.deviceKind }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        HengeNavStack(path: $path, backTitle: "Back") {
             choose
-                .hengeDestination(for: Step.self) { step in
-                    switch step {
-                    case .pairOnDevice: pairOnDevice
-                    case .importFile: importFile
-                    case .connect: connect
-                    case .enable: enable
-                    case .stikDebug: stikDebug
-                    case .trollStore: trollStore
-                    case .jailbreak: jailbreak
-                    }
-                }
+        } page: { step in
+            switch step {
+            case .pairOnDevice: pairOnDevice
+            case .importFile: importFile
+            case .connect: connect
+            case .enable: enable
+            case .stikDebug: stikDebug
+            case .trollStore: trollStore
+            case .jailbreak: jailbreak
+            }
         }
         .tint(Theme.accent)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.propertyList, .data]) { result in
@@ -74,28 +73,28 @@ struct JITSetupFlow: View {
                         : jit.pairingSource == .onDevice ? "Paired on this \(device)."
                         : "No computer needed. Pairs from Settings in a minute."),
                     done: jit.pairingSource == .onDevice,
-                    enabled: builtIn == nil && OnDevicePairing.isSupported) { path.append(.pairOnDevice) }
+                    enabled: builtIn == nil && OnDevicePairing.isSupported) { path = [.pairOnDevice] }
                 way("Use a pairing file", symbol: "doc.badge.plus",
                     detail: builtIn ?? (jit.pairingSource == .imported ? "Pairing file imported."
                         : "Import a pairing file made on a computer."),
                     done: jit.pairingSource == .imported,
-                    enabled: builtIn == nil) { path.append(.importFile) }
+                    enabled: builtIn == nil) { path = [.importFile] }
                 way("Use StikDebug", symbol: "ant",
                     detail: JITBootstrap.isStikDebugInstalled ? "StikDebug is installed."
                         : "Enable JIT through the StikDebug app.",
-                    done: jit.method == .stikDebug) { path.append(.stikDebug) }
+                    done: jit.method == .stikDebug) { path = [.stikDebug] }
                 way("Use TrollStore", symbol: "sparkles",
                     detail: JITBootstrap.isTrollStoreInstalled ? "TrollStore is installed."
                         : "For a Henge installed through TrollStore.",
-                    done: jit.method == .trollStore) { path.append(.trollStore) }
+                    done: jit.method == .trollStore) { path = [.trollStore] }
                 way("Use a jailbreak", symbol: "lock.open",
                     detail: JITBootstrap.debuggedAtLaunch ? "JIT was already on when Henge opened."
                         : JITBootstrap.isJailbroken ? "A jailbreak was found. Turn on Allow JIT in Apps."
                         : "Dopamine can give every app JIT with one setting.",
-                    done: jit.method == .jailbreak || JITBootstrap.debuggedAtLaunch) { path.append(.jailbreak) }
+                    done: jit.method == .jailbreak || JITBootstrap.debuggedAtLaunch) { path = [.jailbreak] }
             }
             if jit.hasPairing && HengeBuiltInJIT.isAvailable {
-                Button { path.append(.connect) } label: {
+                Button { path = [.connect] } label: {
                     Label("Continue with the current pairing", systemImage: "arrow.right")
                         .font(.system(size: 14, weight: .semibold))
                 }
@@ -173,7 +172,7 @@ struct JITSetupFlow: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.textDim)
             case .paired:
-                Button("Continue") { path.append(.connect) }
+                Button("Continue") { path = [.connect] }
                     .buttonStyle(PrimaryButtonStyle())
             }
         }
@@ -241,7 +240,7 @@ struct JITSetupFlow: View {
             if let error = jit.error { outcome(error, ok: false) }
         } actions: {
             if jit.pairingSource == .imported {
-                Button("Continue") { path.append(.connect) }.buttonStyle(PrimaryButtonStyle())
+                Button("Continue") { path = [.connect] }.buttonStyle(PrimaryButtonStyle())
                 Button("Choose another file") { importing = true }
                     .font(.system(size: 15, weight: .medium))
             } else {
@@ -267,7 +266,7 @@ struct JITSetupFlow: View {
         } actions: {
             Button(LocalDevVPN.actionTitle) { LocalDevVPN.open() }
                 .buttonStyle(PrimaryButtonStyle())
-            Button("It's connected") { path.append(.enable) }
+            Button("It's connected") { path = [.enable] }
                 .font(.system(size: 15, weight: .medium))
         }
     }

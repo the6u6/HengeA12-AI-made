@@ -8,9 +8,9 @@
    The function list is a u32 count (not in the list size), then per function a u32 size (counted from that word) and tags
    {4-byte name, u16 length, data} up to ENDT: HASH (SHA-256 of the function's bitcode), MDSZ (its
    size), OFFT (u64 public, private and bitcode offsets, relative to the sections), VERS (u16 AIR
-   major, minor, language major, minor). The same shader built for macOS 15 and iOS 17 differs in
-   the header, VERS (AIR 2.7 and Metal 3.2 against 2.6 and 3.1), and the bitcode's target triple
-   (air64_v27-apple-macosx15.0.0 against air64_v26-apple-ios17.0.0) and so its hash. */
+   major, minor, language major, minor). The same shader built for macOS 15 and iOS 15 differs in
+   the header, VERS (AIR 2.7 and Metal 3.2 against 2.4 and 2.4), and the bitcode's target triple
+   (air64_v27-apple-macosx15.0.0 against air64_v24-apple-ios15.0.0) and so its hash. */
 #include "metallib.h"
 
 #include <CommonCrypto/CommonDigest.h>
@@ -21,7 +21,7 @@ static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] 
 static uint64_t rd64(const uint8_t *p) { return (uint64_t)rd32(p) | (uint64_t)rd32(p + 4) << 32; }
 static void wr16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)v, p[1] = (uint8_t)(v >> 8); }
 
-/* "air64_vNN-apple-macosxA.B.C" in [p, end) becomes "air64_v26-apple-ios17...." of the same length. */
+/* "air64_vNN-apple-macosxA.B.C" in [p, end) becomes "air64_v24-apple-ios15...." of the same length. */
 static int relabel_triple(uint8_t *p, size_t n) {
     static const char key[] = "-apple-macosx";
     int changed = 0;
@@ -32,10 +32,10 @@ static int relabel_triple(uint8_t *p, size_t n) {
         while (e < n && ((p[e] >= '0' && p[e] <= '9') || p[e] == '.')) e++;
         size_t len = e - (i + 7); /* "macosx" + version */
         char out[64];
-        size_t rest = len - 6; /* after "ios17.": "ios17.0.0" needs room for two parts */
+        size_t rest = len - 6; /* after "ios15.": "ios15.0.0" needs room for two parts */
         if (len < 12 || len >= sizeof out) continue;
-        p[i - 2] = '2', p[i - 1] = '6';
-        memcpy(out, "ios17.", 6);
+        p[i - 2] = '2', p[i - 1] = '4';
+        memcpy(out, "ios15.", 6);
         size_t a = rest / 2; /* "0..0" "." "0..0" */
         memset(out + 6, '0', rest);
         out[6 + a] = '.';
@@ -50,9 +50,9 @@ int hv_metallib_relabel(uint8_t *buf, size_t len, int stage) {
     if (rd64(buf + 16) > len) return -1;
     int changed = 0;
     if (rd16(buf + 4) & 0x8000) wr16(buf + 4, rd16(buf + 4) & 0x7fff), changed++;
-    if (rd16(buf + 8) > 7) wr16(buf + 8, 7), changed++;
+    if (rd16(buf + 8) > 5) wr16(buf + 8, 5), changed++;
     if (buf[11] == 0x81) buf[11] = 0x82, changed++;
-    if (rd16(buf + 12) > 17) wr16(buf + 12, 17), wr16(buf + 14, 0), changed++;
+    if (rd16(buf + 12) != 15 || rd16(buf + 14) != 0) wr16(buf + 12, 15), wr16(buf + 14, 0), changed++;
     uint64_t fl = rd64(buf + 24), fls = rd64(buf + 32), bc = rd64(buf + 72), bcs = rd64(buf + 80);
     if (fl > len || fls > len - fl - 4 || bc > len || bcs > len - bc) return changed;
     const uint8_t *end = buf + fl + 4 + fls; /* the size counts the entries after the count */
@@ -68,8 +68,10 @@ int hv_metallib_relabel(uint8_t *buf, size_t len, int stage) {
             uint8_t *d = t + 6;
             if (d + n > fend) break;
             if (!memcmp(t, "VERS", 4) && n >= 8) {
-                if (rd16(d) == 2 && rd16(d + 2) > 6) wr16(d + 2, 6), changed++;           /* AIR 2.7 and up: 2.6 */
-                if (rd16(d + 4) == 3 && rd16(d + 6) > 1) wr16(d + 6, 1), changed++;       /* Metal 3.2 and up: 3.1 */
+                if (rd16(d) > 2 || (rd16(d) == 2 && rd16(d + 2) > 4))
+                    wr16(d, 2), wr16(d + 2, 4), changed++;                 /* AIR 2.5 and up: 2.4 */
+                if (rd16(d + 4) > 2 || (rd16(d + 4) == 2 && rd16(d + 6) > 4))
+                    wr16(d + 4, 2), wr16(d + 6, 4), changed++;             /* Metal 2.5 and up: 2.4 */
             } else if (!memcmp(t, "HASH", 4) && n == 32) {
                 hash = d;
             } else if (!memcmp(t, "MDSZ", 4) && n == 8) {

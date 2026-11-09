@@ -37,8 +37,8 @@ enum Device {
     /// How much memory to suggest for a new Mac: what leaves this device room for iOS.
     static var suggestedRAMGB: Int {
         let mb = ProcessInfo.processInfo.physicalMemory >> 20
-        // m4 fork: an 8 GB iPad (7.4 GB usable) thrashes and kills the Mac at 6 GB: 16 GB devices only.
-        return mb >= 14_000 ? 8 : mb >= 10_000 ? 6 : 4
+        // A 3 GB iPhone has to keep more for iOS, so offer 3 rather than 4 there.
+        return mb >= 14_000 ? 8 : mb >= 10_000 ? 6 : mb >= 3_500 ? 4 : 3
     }
 
     /// The choices for a Mac's memory, in GB.
@@ -51,16 +51,18 @@ enum Device {
         return nil
     }
 
-    /// The virtual CPU offers Armv8.5 instructions (core/sysreg.c), and macOS uses them. They run as
-    /// they are, so the chip needs them too: A14, M1 and later, which is iPhone13,x and iPad13,x up.
+    /// The virtual CPU offers Armv8.4 instructions (core/sysreg.c), and macOS uses them. The
+    /// translator stands in for the two Armv8.5 ones macOS also uses (SB and FRINT32/64) and
+    /// stops advertising those, so the chip only needs 8.4: A13, M1 and later, which is
+    /// iPhone12,x and iPad12,x up. A12 and earlier still can't run it.
     static let chipTooOld: Bool = {
         let model = HengeLog.deviceModel
         guard model.hasPrefix("iPhone") || model.hasPrefix("iPad"),
               let major = Int(model.drop { !$0.isNumber }.prefix { $0.isNumber }) else { return false }
-        return major < 13
+        return major < 12
     }()
 
-    static let chipTooOldText = "macOS won't run on this \(name). Henge needs an A14 or M1 chip or newer."
+    static let chipTooOldText = "macOS won't run on this \(name). Henge needs an A13 or M1 chip or newer."
 }
 
 /// A keyboard attached to the device. iOS reports each key going down and coming up by its HID usage,

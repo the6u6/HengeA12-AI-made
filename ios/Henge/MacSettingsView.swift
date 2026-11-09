@@ -109,7 +109,7 @@ struct MacSettingsView: View {
         .navigationTitle(mac.name)
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear(perform: save)
-        .fileMover(isPresented: $movingExport, file: machines.lastExport) { result in
+        .hengeFileMover(isPresented: $movingExport, file: machines.lastExport) { result in
             switch result {
             case .success: machines.lastExport = nil
             case .failure(let error): machines.lastError = error.localizedDescription
