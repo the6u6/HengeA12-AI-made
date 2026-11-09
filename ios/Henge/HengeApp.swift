@@ -72,7 +72,7 @@ struct RootView: View {
             machines.collectImports()
             jit.enableAtLaunchIfAsked()
         }
-        .onChange(of: jit.attachGeneration) { _ in JITBootstrap.prewarm() } // the built-in helper attached
+        .onChange(of: jit.attachGeneration) { _ in JITBootstrap.prewarmAfterAttach() } // the built-in helper attached
         .task { // testing only: HENGE_AUTOPILOT
             await Autopilot.run { mac in
                 // A session still on screen (its Mac stopped) is closed first: the same value again would start nothing.

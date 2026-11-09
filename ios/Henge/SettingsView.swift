@@ -17,6 +17,13 @@ struct SettingsView: View {
             Form {
                 Section("JIT") {
                     HengeLabeledContent("Status", value: JITBootstrap.ready ? "On" : "Off")
+                    HengeLabeledContent("JIT region", value: JITBootstrap.regionHeld ? "Held" : "Not held")
+                    if let map = JITBootstrap.mapJITResult {
+                        HengeLabeledContent("MAP_JIT", value: map ? "Executes" : "Not usable")
+                    }
+                    if !JITBootstrap.ready, let failure = JITBootstrap.lastFailure {
+                        Text(failure).font(.footnote).foregroundStyle(.secondary)
+                    }
                     Picker("Method", selection: $jit.method) {
                         ForEach(JITMethod.allCases) { Text($0.title).tag($0) }
                     }

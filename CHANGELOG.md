@@ -23,6 +23,13 @@ Every change keeps its original author in the git history.
 - **Graphics.** macOS's Metal libraries are relabelled for iOS 15 (AIR 2.4, library
   file 2.5, `air64_v24-apple-ios15.0.0`) instead of iOS 17, since the older Metal
   runtime refuses a library built for a newer OS.
+- **JIT status means a region is held.** `JITBootstrap.ready` used to answer "On" as soon as
+  the process was marked debugged (`CS_DEBUGGED`), which TrollStore's enable-jit and Dopamine's
+  *Allow JIT in Apps* both do, without a region existing. The installer therefore started and
+  then failed with "Henge has no JIT region". Status now reports a region only after one is
+  actually claimed and self-tested; the self-grant route (MAP_JIT or plain memory) claims it
+  there too, instead of leaving it for QEMU, which the iOS installer never asks to map its own.
+  Settings also shows whether the region is held and why a claim failed.
 - **Smaller devices** suggest 3 GB for a new Mac on a 3 GB iPhone.
 - CI takes the prebuilt iOS libraries from [Husk 15](https://github.com/the6u6/Husk15-AI-made),
   built against an iOS 14 floor.
