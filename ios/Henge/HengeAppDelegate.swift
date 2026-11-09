@@ -22,4 +22,12 @@ final class HengeAppDelegate: NSObject, UIApplicationDelegate {
         }
         return config
     }
+
+    /// iOS says this when memory is tight. A jetsam kill follows with no callback of its own, so this
+    /// is the last warning the log can show; the footprint beside it says how close the process was.
+    /// It is what tells a memory kill apart from a crash when the log simply stops.
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        HengeLog.log("memory", "iOS sent a memory warning")
+        HengeLog.logFootprint("memory-warning")
+    }
 }

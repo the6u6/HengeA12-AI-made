@@ -202,24 +202,34 @@ final class Installer: NSObject, ObservableObject {
             throw message("Turn on JIT first: the installer runs the Mac's own restore system, which needs it."
                           + (JITBootstrap.lastFailure.map { " " + $0 } ?? ""))
         }
-        // The restore needs 2 GB, whatever the Mac is set to use afterwards, and gets at most 4 GB: the restore system
-        // caches the ~15 GB it writes, so it fills all the memory it is given, and 10 GB of a 12 GB iPhone's RAM in use
-        // (it is outside Henge's footprint, so iOS does not stop it) stalls the whole phone two thirds of the way through.
+        // The restore needs 2 GB, whatever the Mac is set to use afterwards, and never more than this device can
+        // spare (Device.restoreRAMCeilingMB): the restore system caches the ~15 GB it writes, so it fills all the
+        // memory it is given, and a large guest on a small phone stalls the whole device and gets Henge killed
+        // mid-install, with no crash report.
         var restoring = mac
-        restoring.ramMB = min(max(mac.ramMB, 2048), 4096)
+        restoring.ramMB = min(max(mac.ramMB, 2048), Device.restoreRAMCeilingMB)
+        HengeLog.log("install", "restore RAM \(restoring.ramMB) MB (Mac asks \(mac.ramMB)), "
+                      + "file-backed \(Device.tightRAM ? "yes" : "no")")
         let ram = GuestMemory.prepare(restoring)
         guard ram >= 2048 else { throw message("Installing needs a few more GB of free storage for the Mac's memory.") }
         setenv("HV_WRITE_CACHE", "0", 1) // the ~15 GB the restore writes goes straight to storage (host/disk.c); this process runs no other Mac
         let work = mac.directory.appendingPathComponent("restore", isDirectory: true)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        HengeLog.logFootprint("before-install")
         var buffer = [CChar](repeating: 0, count: 256)
         let rc = henge_vm_install(mac.rom.path, mac.disk.path, mac.aux.path, mac.ecid, ipsw.path, work.path, ram, Int32(cpus),
                                   &buffer, buffer.count)
         if rc != 0 { throw message(String(cString: buffer)) }
+        HengeLog.logFootprint("install-started")
+        var waited = 0
         while true {
             try await Task.sleep(nanoseconds: 1_000_000_000)
+            waited += 1
             step = Int(henge_install_step())
             stepProgress = henge_install_progress()
+            // How close to the memory limit the install is, every 10 s: a jetsam kill leaves no
+            // crash report, so this figure is the only way to tell it from a crash.
+            if waited % 10 == 0 { HengeLog.logFootprint("install") }
             if step == 100 { break }
             if step == 101 { throw message("The restore failed. The log (Settings, or Documents/henge.log) says why.") }
             if henge_vm_state() == 2 && step < 100 {

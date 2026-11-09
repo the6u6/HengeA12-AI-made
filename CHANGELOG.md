@@ -30,7 +30,14 @@ Every change keeps its original author in the git history.
   actually claimed and self-tested; the self-grant route (MAP_JIT or plain memory) claims it
   there too, instead of leaving it for QEMU, which the iOS installer never asks to map its own.
   Settings also shows whether the region is held and why a claim failed.
-- **Smaller devices** suggest 3 GB for a new Mac on a 3 GB iPhone.
+- **Smaller devices** suggest 3 GB for a new Mac on a 3 GB iPhone, and an install no longer
+  gives the restore system all of it. The restore fills whatever RAM it is given (it caches the
+  ~15 GB it writes), so on a 3 GB iPhone the old 4 GB cap left nothing for iOS: the phone started
+  paging and iOS killed Henge at the start of "Write macOS" with no crash report. The restore now
+  gets 2 GB there (2.5 GB on 4 GB phones, 3 GB on 6 GB phones, 4 GB from 8 GB up), its RAM is backed
+  by a file so iOS can drop pages, the whole guest is no longer prefaulted at once, and the code
+  region is 512 MB on 3/4 GB phones. The install logs process memory every 10 s, and iOS's memory
+  warnings, so a memory kill can be told from a crash.
 - CI takes the prebuilt iOS libraries from [Husk 15](https://github.com/the6u6/Husk15-AI-made),
   built against an iOS 14 floor.
 

@@ -60,12 +60,22 @@ enum JITBootstrap {
     /// The one region HengeVM's translator gets for the whole session (it flushes and starts over when full,
     /// never asks for more). 1 GB takes about 1.5 s to prepare, and a first boot through Setup makes that much code; a full flush drops all of it.
     static let codeCacheKey = "henge.perf.codeCacheMB"
-    /// 1 GB, or 1.5 GB (Settings > Performance > Code cache; without a choice there, 1.5 GB where the memory limit
-    /// has room for it: about 6 GB on 12 GB iPhones). A bigger cache fills and empties less often (macOS 27 filled
-    /// 1 GB about once a minute) and costs more memory (its blocks' records come to about 0.75 of its size). Fixed for
-    /// the launch: the region is claimed once.
-    static let defaultCodeCacheMB: Int = Entitlements.memoryLimitAtLaunch >= 5_500 << 20 ? 1536 : 1024
-    static let jitBytes: Int = ((UserDefaults.standard.object(forKey: codeCacheKey) as? Int) ?? defaultCodeCacheMB) == 1536 ? 1536 << 20 : 1024 << 20
+    /// 512 MB on a 3 or 4 GB phone, otherwise 1 GB, or 1.5 GB where the memory limit has room for it (about 6 GB on
+    /// 12 GB iPhones). A bigger cache fills and empties less often (macOS 27 filled 1 GB about once a minute) and costs
+    /// more memory (its blocks' records come to about 0.75 of its size). Fixed for the launch: the region is claimed once.
+    ///
+    /// The region is held for the whole session, and a restore needs 2 GB of guest RAM beside it. On a phone with 3 or
+    /// 4 GB, a 1 GB region plus that guest leaves nothing for iOS, so the region starts at 512 MB there: a full cache
+    /// only costs a flush, while being over the memory limit costs the install.
+    static let defaultCodeCacheMB: Int = {
+        if Device.veryTightRAM { return 512 }
+        return Entitlements.memoryLimitAtLaunch >= 5_500 << 20 ? 1536 : 1024
+    }()
+    static let jitBytes: Int = {
+        if Device.veryTightRAM { return 512 << 20 }
+        let chosen = (UserDefaults.standard.object(forKey: codeCacheKey) as? Int) ?? defaultCodeCacheMB
+        return (chosen >= 1536 ? 1536 : 1024) << 20
+    }()
 
     /// True once the region is held. The memory budget needs this: after a
     /// prewarm the JIT is already counted in the footprint, so subtracting it

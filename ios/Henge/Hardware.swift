@@ -34,12 +34,35 @@ enum Device {
         return (Int((Double(s.width) / 264 * 25.4).rounded()), Int((Double(s.height) / 264 * 25.4).rounded()))
     }
 
+    /// This device's RAM, in MiB.
+    static let physicalRAMMB = Int(ProcessInfo.processInfo.physicalMemory >> 20)
+
     /// How much memory to suggest for a new Mac: what leaves this device room for iOS.
     static var suggestedRAMGB: Int {
-        let mb = ProcessInfo.processInfo.physicalMemory >> 20
         // A 3 GB iPhone has to keep more for iOS, so offer 3 rather than 4 there.
-        return mb >= 14_000 ? 8 : mb >= 10_000 ? 6 : mb >= 3_500 ? 4 : 3
+        return physicalRAMMB >= 14_000 ? 8 : physicalRAMMB >= 10_000 ? 6 : physicalRAMMB >= 3_500 ? 4 : 3
     }
+
+    /// The most RAM the restore system may get, in MB.
+    ///
+    /// The restore fills all the memory it is given (it caches the ~15 GB it writes), and Henge holds
+    /// its JIT region beside it. On a small phone the old 4 GB cap leaves nothing for iOS: the whole
+    /// device starts paging, and iOS kills Henge mid-install with no crash report. The restore only
+    /// needs 2 GB, so that is what a 3 GB iPhone gets; larger phones keep enough room for iOS.
+    static var restoreRAMCeilingMB: Int {
+        if physicalRAMMB < 3_500 { return 2048 } // 3 GB phones
+        if physicalRAMMB < 5_500 { return 2560 } // 4 GB phones
+        if physicalRAMMB < 7_500 { return 3072 } // 6 GB phones
+        return 4096
+    }
+
+    /// A phone where the guest's RAM has to be pageable: there is not enough memory for a 2 GB guest,
+    /// the JIT region and iOS to all stay resident, so iOS must be able to write guest pages out to
+    /// the RAM file and drop them.
+    static var tightRAM: Bool { physicalRAMMB < 7_500 }
+
+    /// A 3 or 4 GB phone, where even the code region has to be smaller.
+    static var veryTightRAM: Bool { physicalRAMMB < 5_500 }
 
     /// The choices for a Mac's memory, in GB.
     static let memoryChoices = 1...16
