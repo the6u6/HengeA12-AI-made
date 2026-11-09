@@ -47,7 +47,6 @@ int henge_vm_boot(const char *rom, const char *disk, const char *aux, uint64_t e
     fprintf(stderr, "henge: booting with %d CPUs, %llu MB RAM, a %zu MB JIT region\n", cpus, (unsigned long long)ram_mb,
             jit->size >> 20);
     if (hv_vm_create(&c, err, errlen) != 0) return -1;
-    if (getenv("HV_STATS")) hv_vm_machine()->stats_interval = atoi(getenv("HV_STATS"));
     state = 1;
     hv_vm_start(1, on_exit);
     return 0;
@@ -62,7 +61,7 @@ static void on_install_progress(int step, double p, void *user) {
     install_progress = p;
     static int last = -1, lastpct = -1;
     int pct = (int)(p * 100);
-    if (step != last || pct / 10 != lastpct / 10) {
+    if (step != last || pct != lastpct) {
         fprintf(stderr, "henge: install step %d %d%%\n", step, pct);
         last = step, lastpct = pct;
     }

@@ -4,6 +4,7 @@
 #include <TargetConditionals.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <dispatch/dispatch.h>
+#include <mach/mach_host.h>
 #include <os/lock.h>
 #include <stdatomic.h>
 #include <pthread.h>
@@ -25,6 +26,8 @@
 static HvMachine m;
 static HvCpu cpus[HV_MAX_CPUS]; /* the board takes them as an array */
 static int ncpus = 1;
+/* HV_HEARTBEAT, read in hv_vm_start: the caller may unset it as soon as that returns. */
+static int heartbeat_seconds;
 static HvVmapple board;
 /* UI display changes may arrive before or during the background machine creation. */
 static os_unfair_lock display_lock = OS_UNFAIR_LOCK_INIT;
@@ -238,6 +241,9 @@ int hv_vm_create(const HvVmConfig *c, char *err, size_t errlen) {
     int r = c->jit_rx ? hv_machine_init_jit(&m, c->jit_rx, c->jit_rw, jit) : hv_machine_init(&m, jit);
     if (r != 0) return fail(err, errlen, "Cannot set up the JIT region.");
     m.log = c->log;
+    /* HV_STATS=seconds: the dispatcher's own report. Every front end gets it here, so an
+       install (which never called henge_vm_boot) can report its throughput too. */
+    m.stats_interval = getenv("HV_STATS") ? atoi(getenv("HV_STATS")) : 0;
     m.gen_checks = getenv("HV_JIT_POISON") != NULL;
     if (getenv("HV_SLOW_MEM")) m.slow_mem = 1; /* debugging: every load and store through the helper */
     ncpus = c->ncpus < 1 ? 1 : c->ncpus > HV_MAX_CPUS ? HV_MAX_CPUS : c->ncpus;
@@ -274,21 +280,37 @@ static void *kicker_thread(void *unused) {
     (void)unused;
     /* HV_HEARTBEAT=seconds: what every guest CPU is doing, whatever the guest does. The
        dispatcher's stats print as blocks are made, so they stop when a CPU spins in one
-       block or the machine stalls, which is exactly when the log needs a line. */
-    int heartbeat = getenv("HV_HEARTBEAT") ? atoi(getenv("HV_HEARTBEAT")) : 0;
-    unsigned ticks = 0;
+       block or the machine stalls, which is exactly when the log needs a line. The value
+       is read in hv_vm_start, before this thread exists: a caller may unset the variable
+       as soon as the machine has started. */
+    int heartbeat = heartbeat_seconds;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t next = (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
     for (;;) {
         usleep(1000);
         hv_machine_kick_all(&m);
-        if (heartbeat > 0 && ++ticks % ((unsigned)heartbeat * 1000) == 0) {
-            fprintf(stderr, "hengevm: heartbeat");
-            for (int i = 0; i < ncpus; i++)
-                fprintf(stderr, " [%d] %s el%u pc %llx", i, m.cpus[i] && !m.cpus[i]->off ? "on" : "off",
-                        m.cpus[i] ? m.cpus[i]->el : 0, m.cpus[i] ? (unsigned long long)m.cpus[i]->pc : 0ull);
-            fprintf(stderr, ", jit %llu/%zu MB, blocks %u, full flushes %llu\n",
-                    (unsigned long long)m.jit.used * 4 >> 20, (size_t)m.jit.capacity * 4 >> 20, (unsigned)m.nblocks,
-                    (unsigned long long)m.stats.flush_full);
-        }
+        if (heartbeat <= 0) continue;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        uint64_t now = (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+        if (now < next) continue;
+        next = now + (uint64_t)heartbeat * 1000;
+        fprintf(stderr, "hengevm: heartbeat");
+        for (int i = 0; i < ncpus; i++)
+            fprintf(stderr, " [%d] %s el%u pc %llx", i, m.cpus[i] && !m.cpus[i]->off ? "on" : "off",
+                    m.cpus[i] ? m.cpus[i]->el : 0, m.cpus[i] ? (unsigned long long)m.cpus[i]->pc : 0ull);
+        fprintf(stderr, ", jit %llu/%zu MB, blocks %u, full flushes %llu",
+                (unsigned long long)m.jit.used * 4 >> 20, (size_t)m.jit.capacity * 4 >> 20, (unsigned)m.nblocks,
+                (unsigned long long)m.stats.flush_full);
+        /* The guest's RAM is outside the footprint, so the host's own free and compressed
+           pages are the only sign of how close the phone is to dropping something. */
+        vm_statistics64_data_t vs = {0};
+        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+        if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&vs, &count) == KERN_SUCCESS)
+            fprintf(stderr, ", host free %llu MB compressed %llu MB",
+                    (unsigned long long)vs.free_count * vm_page_size >> 20,
+                    (unsigned long long)vs.compressor_page_count * vm_page_size >> 20);
+        fprintf(stderr, "\n");
     }
 }
 
@@ -356,6 +378,9 @@ static void *cpu0_thread(void *unused) {
 
 void hv_vm_start(int cpu0, void (*on_exit)(int reason)) {
     exit_cb = on_exit;
+    /* Read here, not in the thread: henge_vm_install returns as soon as this does, and
+       Installer.swift unsets HV_HEARTBEAT right away so a later Mac boot does not log it. */
+    heartbeat_seconds = getenv("HV_HEARTBEAT") ? atoi(getenv("HV_HEARTBEAT")) : 0;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setstacksize(&attr, 8u << 20);

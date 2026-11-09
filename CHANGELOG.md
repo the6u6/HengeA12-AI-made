@@ -46,6 +46,12 @@ Every change keeps its original author in the git history.
   mode" while the guest was still starting. That wait, the restore-reboot wait and the restore-mode
   reboot wait are now five minutes, and the install logs what every guest CPU is doing every 10 s so
   a stalled boot can be told from a slow one.
+- **Install diagnostics actually run.** Neither was reaching the log: the install path never set the
+  engine's stats interval (only a normal Mac boot did), and `HV_HEARTBEAT` was unset as soon as
+  `hv_vm_start` returned, before the thread that reads it had started. The interval is now applied
+  when the machine is built, the heartbeat is read synchronously at start, and its line also reports
+  each CPU's PC, the code-cache use, and the host's free and compressed memory. Install progress is
+  logged every 1% instead of every 10%.
 - CI takes the prebuilt iOS libraries from [Husk 15](https://github.com/the6u6/Husk15-AI-made),
   built against an iOS 14 floor.
 
