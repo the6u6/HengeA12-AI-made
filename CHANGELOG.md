@@ -35,11 +35,12 @@ Every change keeps its original author in the git history.
   ~15 GB it writes), so on a 3 GB iPhone the old 4 GB cap left nothing for iOS: the phone started
   paging and iOS killed Henge at the start of "Write macOS" with no crash report. The restore now
   gets 2 GB there (2.5 GB on 4 GB phones, 3 GB on 6 GB phones, 4 GB from 8 GB up) and the code
-  region is 512 MB on 3/4 GB phones. Guest RAM keeps the engine's default backing (anonymous RAM
-  outside the memory limit, the RAM file only as a fallback): forcing the file to make the pages
-  evictable was tried, and the emulated restore kernel then went quiet a few seconds into boot and
-  never took over from iBoot, even with five minutes. The install logs process memory every 10 s
-  and iOS's memory warnings, so a memory kill can be told from a crash.
+  region is 512 MB on 3/4 GB phones. On those phones the restore guest's RAM is placed in a file
+  that iOS can write back and drop: the 2 GB guest, Henge and iOS do not fit together as anonymous
+  pages, and installs were killed about 10% into "Write macOS" once the guest had touched almost
+  all of its RAM. Prefault is off. A Mac launched afterwards keeps the engine's default backing.
+  The install logs process memory every 10 s and iOS's memory warnings, so a memory kill can be
+  told from a crash.
 - **Restore-mode timeout.** idevicerestore waits 30 seconds for the device to leave recovery mode
   after the kernelcache is sent, while the emulated Mac's restore kernel takes longer than a real
   iPhone's to take over and re-enumerate. The install failed with "Failed to place device in restore

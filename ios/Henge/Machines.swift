@@ -33,16 +33,23 @@ struct VirtualMac: Identifiable, Codable, Hashable {
 /// a file beside the disk: iOS's memory limit does not count a mapped file's pages either.
 enum GuestMemory {
     /// Points the engine at the file (it is unlinked as soon as it is open) and returns the size that fits.
-    static func prepare(_ mac: VirtualMac) -> UInt64 {
+    ///
+    /// - Parameter pageable: keep the guest's RAM in the file even when the footprint-free allocation
+    ///   would be accepted. An install needs that: the restore system caches the images it writes and
+    ///   fills all the RAM it is given, and on a 3 GB phone the 2 GB guest, Henge and iOS do not fit
+    ///   together. Anonymous pages cannot be written out, so iOS kills Henge mid-install; a file's
+    ///   pages are written back and dropped. Prefaulting is off with it, because dirtying the whole
+    ///   guest at once is the spike that gets Henge killed before the install even starts.
+    static func prepare(_ mac: VirtualMac, pageable: Bool = false) -> UInt64 {
         let file = mac.directory.appendingPathComponent("ram.tmp")
         setenv("HV_RAM_FILE", file.path, 1)
-        // The engine tries RAM the memory limit does not count first (anonymous, alloc_no_footprint)
-        // and falls back to this file. Forcing the file on small phones (HV_RAM_NO_LEDGER) made the
-        // guest's RAM pageable, but the emulated restore kernel then never took over from iBoot: it
-        // went quiet a few seconds into boot and stayed that way for five minutes, with the host
-        // alive and no memory warning. The default path is what installs used while they still
-        // reached "Write macOS"; the smaller restore ceiling above is what keeps the phone out of
-        // jetsam instead.
+        if pageable {
+            setenv("HV_RAM_NO_LEDGER", "1", 1)
+            setenv("HV_RAM_NO_PREFAULT", "1", 1)
+        } else {
+            unsetenv("HV_RAM_NO_LEDGER") // a Mac launched later keeps the engine's default backing
+            unsetenv("HV_RAM_NO_PREFAULT")
+        }
         let free = (try? mac.directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? 0
         let room = free > 0 ? UInt64(max(free - (2 << 30), 0)) >> 20 : UInt64.max
