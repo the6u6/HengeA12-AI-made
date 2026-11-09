@@ -272,11 +272,24 @@ int hv_vm_create(const HvVmConfig *c, char *err, size_t errlen) {
 
 static void *kicker_thread(void *unused) {
     (void)unused;
+    /* HV_HEARTBEAT=seconds: what every guest CPU is doing, whatever the guest does. The
+       dispatcher's stats print as blocks are made, so they stop when a CPU spins in one
+       block or the machine stalls, which is exactly when the log needs a line. */
+    int heartbeat = getenv("HV_HEARTBEAT") ? atoi(getenv("HV_HEARTBEAT")) : 0;
+    unsigned ticks = 0;
     for (;;) {
         usleep(1000);
         hv_machine_kick_all(&m);
+        if (heartbeat > 0 && ++ticks % ((unsigned)heartbeat * 1000) == 0) {
+            fprintf(stderr, "hengevm: heartbeat");
+            for (int i = 0; i < ncpus; i++)
+                fprintf(stderr, " [%d] %s el%u pc %llx", i, m.cpus[i] && !m.cpus[i]->off ? "on" : "off",
+                        m.cpus[i] ? m.cpus[i]->el : 0, m.cpus[i] ? (unsigned long long)m.cpus[i]->pc : 0ull);
+            fprintf(stderr, ", jit %llu/%zu MB, blocks %u, full flushes %llu\n",
+                    (unsigned long long)m.jit.used * 4 >> 20, (size_t)m.jit.capacity * 4 >> 20, (unsigned)m.nblocks,
+                    (unsigned long long)m.stats.flush_full);
+        }
     }
-    return NULL;
 }
 
 /* A thread that runs guest code. While a block runs its SP register holds the

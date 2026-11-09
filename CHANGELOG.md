@@ -34,15 +34,18 @@ Every change keeps its original author in the git history.
   gives the restore system all of it. The restore fills whatever RAM it is given (it caches the
   ~15 GB it writes), so on a 3 GB iPhone the old 4 GB cap left nothing for iOS: the phone started
   paging and iOS killed Henge at the start of "Write macOS" with no crash report. The restore now
-  gets 2 GB there (2.5 GB on 4 GB phones, 3 GB on 6 GB phones, 4 GB from 8 GB up), its RAM is backed
-  by a file so iOS can drop pages, the whole guest is no longer prefaulted at once, and the code
-  region is 512 MB on 3/4 GB phones. The install logs process memory every 10 s, and iOS's memory
-  warnings, so a memory kill can be told from a crash.
+  gets 2 GB there (2.5 GB on 4 GB phones, 3 GB on 6 GB phones, 4 GB from 8 GB up) and the code
+  region is 512 MB on 3/4 GB phones. Guest RAM keeps the engine's default backing (anonymous RAM
+  outside the memory limit, the RAM file only as a fallback): forcing the file to make the pages
+  evictable was tried, and the emulated restore kernel then went quiet a few seconds into boot and
+  never took over from iBoot, even with five minutes. The install logs process memory every 10 s
+  and iOS's memory warnings, so a memory kill can be told from a crash.
 - **Restore-mode timeout.** idevicerestore waits 30 seconds for the device to leave recovery mode
-  after the kernelcache is sent, and the emulated Mac's restore kernel can take minutes to boot
-  when its RAM is paged in on demand (which the smaller restore above needs). The install then
-  failed with "Failed to place device in restore mode" while the guest was still starting. That
-  wait, the restore-reboot wait and the restore-mode reboot wait are now five minutes.
+  after the kernelcache is sent, while the emulated Mac's restore kernel takes longer than a real
+  iPhone's to take over and re-enumerate. The install failed with "Failed to place device in restore
+  mode" while the guest was still starting. That wait, the restore-reboot wait and the restore-mode
+  reboot wait are now five minutes, and the install logs what every guest CPU is doing every 10 s so
+  a stalled boot can be told from a slow one.
 - CI takes the prebuilt iOS libraries from [Husk 15](https://github.com/the6u6/Husk15-AI-made),
   built against an iOS 14 floor.
 

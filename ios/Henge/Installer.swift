@@ -208,8 +208,7 @@ final class Installer: NSObject, ObservableObject {
         // mid-install, with no crash report.
         var restoring = mac
         restoring.ramMB = min(max(mac.ramMB, 2048), Device.restoreRAMCeilingMB)
-        HengeLog.log("install", "restore RAM \(restoring.ramMB) MB (Mac asks \(mac.ramMB)), "
-                      + "file-backed \(Device.tightRAM ? "yes" : "no")")
+        HengeLog.log("install", "restore RAM \(restoring.ramMB) MB (Mac asks \(mac.ramMB))")
         let ram = GuestMemory.prepare(restoring)
         guard ram >= 2048 else { throw message("Installing needs a few more GB of free storage for the Mac's memory.") }
         setenv("HV_WRITE_CACHE", "0", 1) // the ~15 GB the restore writes goes straight to storage (host/disk.c); this process runs no other Mac
@@ -217,8 +216,13 @@ final class Installer: NSObject, ObservableObject {
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         HengeLog.logFootprint("before-install")
         var buffer = [CChar](repeating: 0, count: 256)
+        // Every 10 s the engine reports what each guest CPU is doing (PC, EL, code cache use). The
+        // dispatcher's own stats stop when a CPU spins or the machine stalls, and then a stalled
+        // restore and a very slow one look the same in the log.
+        setenv("HV_HEARTBEAT", "10", 1)
         let rc = henge_vm_install(mac.rom.path, mac.disk.path, mac.aux.path, mac.ecid, ipsw.path, work.path, ram, Int32(cpus),
                                   &buffer, buffer.count)
+        unsetenv("HV_HEARTBEAT") // the machine has started; a Mac launched later is not the install
         if rc != 0 { throw message(String(cString: buffer)) }
         HengeLog.logFootprint("install-started")
         var waited = 0

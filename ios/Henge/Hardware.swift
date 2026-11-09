@@ -56,11 +56,6 @@ enum Device {
         return 4096
     }
 
-    /// A phone where the guest's RAM has to be pageable: there is not enough memory for a 2 GB guest,
-    /// the JIT region and iOS to all stay resident, so iOS must be able to write guest pages out to
-    /// the RAM file and drop them.
-    static var tightRAM: Bool { physicalRAMMB < 7_500 }
-
     /// A 3 or 4 GB phone, where even the code region has to be smaller.
     static var veryTightRAM: Bool { physicalRAMMB < 5_500 }
 

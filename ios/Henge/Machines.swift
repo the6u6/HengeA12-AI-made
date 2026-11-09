@@ -36,21 +36,20 @@ enum GuestMemory {
     static func prepare(_ mac: VirtualMac) -> UInt64 {
         let file = mac.directory.appendingPathComponent("ram.tmp")
         setenv("HV_RAM_FILE", file.path, 1)
-        // On a phone with little RAM the guest's pages have to be pageable. Mapped file pages can be
-        // written out and dropped by iOS; anonymous pages (even ones outside the footprint) cannot.
-        // Prefaulting dirties the whole guest at once, which is the spike that gets Henge killed
-        // during an install, so that is off as well and the pages fault in as the guest touches them.
-        if Device.tightRAM {
-            setenv("HV_RAM_NO_LEDGER", "1", 1)
-            setenv("HV_RAM_NO_PREFAULT", "1", 1)
-        }
+        // The engine tries RAM the memory limit does not count first (anonymous, alloc_no_footprint)
+        // and falls back to this file. Forcing the file on small phones (HV_RAM_NO_LEDGER) made the
+        // guest's RAM pageable, but the emulated restore kernel then never took over from iBoot: it
+        // went quiet a few seconds into boot and stayed that way for five minutes, with the host
+        // alive and no memory warning. The default path is what installs used while they still
+        // reached "Write macOS"; the smaller restore ceiling above is what keeps the phone out of
+        // jetsam instead.
         let free = (try? mac.directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? 0
         let room = free > 0 ? UInt64(max(free - (2 << 30), 0)) >> 20 : UInt64.max
         let reach = henge_largest_mapping_mb()
         let ram = min(UInt64(mac.ramMB), room, reach > 512 ? reach - 512 : 0) / 512 * 512
         HengeLog.log("session", "guest RAM \(ram) MB (asked \(mac.ramMB), disk room \(room), largest mapping \(reach), "
-                              + "physical \(Device.physicalRAMMB), pageable \(Device.tightRAM ? "yes" : "no"))")
+                              + "physical \(Device.physicalRAMMB))")
         return ram
     }
 }
