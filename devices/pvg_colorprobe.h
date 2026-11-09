@@ -414,8 +414,10 @@ static void cp_log_layer(HvReplay *r, CAMetalLayer *l) { /* a layer being set up
     CFStringRef name = cs ? CGColorSpaceCopyName(cs) : NULL;
     char buf[160] = "nil(no colour matching)";
     if (name) CFStringGetCString(name, buf, sizeof buf, kCFStringEncodingUTF8);
+    int edr = 0;
+    if (@available(iOS 16.0, *)) edr = (int)l.wantsExtendedDynamicRangeContent; /* the property is iOS 16 */
     cp_log("layer", "pixelFormat=%lu colorspace=%s edr=%d framebufferOnly=%d opaque=%d contentsScale=%.2f drawableSize=%.0fx%.0f maxDrawables=%lu device=%s",
-           (unsigned long)l.pixelFormat, buf, (int)l.wantsExtendedDynamicRangeContent, (int)l.framebufferOnly, (int)l.isOpaque,
+           (unsigned long)l.pixelFormat, buf, edr, (int)l.framebufferOnly, (int)l.isOpaque,
            l.contentsScale, l.drawableSize.width, l.drawableSize.height, (unsigned long)l.maximumDrawableCount, r->device.name.UTF8String);
     if (name) CFRelease(name);
 }

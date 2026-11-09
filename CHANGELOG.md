@@ -15,7 +15,9 @@ Every change keeps its original author in the git history.
   The SwiftUI that needed 16/17 (`NavigationStack`, `NavigationLink(value:)`,
   `LabeledContent`, `ShareLink`, `persistentSystemOverlays`, `scrollContentBackground`) is
   replaced by the shims in `Henge/Compat15.swift`, and the external display scene compares
-  `UISceneSession.Role.rawValue` so it still works below iOS 16. On iOS 15 on A12 or newer,
+  `UISceneSession.Role.rawValue` so it still works below iOS 16. UIKit and Metal calls newer
+  than 15 (`UIHostingController.sizingOptions`, EDR headroom, `gpuAddress`/`gpuResourceID`,
+  vertex attribute strides) are only used when available. On iOS 15 on A12 or newer,
   install the `.tipa`: iOS refuses the `dynamic-codesigning` entitlement on those devices, so
   the plain `.ipa` crashes when TrollStore launches it.
 - **Graphics.** macOS's Metal libraries are relabelled for iOS 15 (AIR 2.4, library

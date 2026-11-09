@@ -1420,10 +1420,20 @@ typedef struct {
             offsets[i] = (NSUInteger)U64(12 + i * 20);
             strides[i] = (NSUInteger)U64(20 + i * 20);
         }
-        [e setVertexBuffers:buffers offsets:offsets attributeStrides:strides withRange:NSMakeRange(index, count)];
+        if (@available(iOS 17.0, macOS 14.0, *)) {
+            [e setVertexBuffers:buffers offsets:offsets attributeStrides:strides withRange:NSMakeRange(index, count)];
+        } else {
+            /* Before iOS 17, the strides come from the pipeline's vertex descriptor. */
+            [e setVertexBuffers:buffers offsets:offsets withRange:NSMakeRange(index, count)];
+        }
         break;
     }
-    case 166: [e setVertexBufferOffset:(NSUInteger)U64(4) attributeStride:(NSUInteger)U64(12) atIndex:U32(0)]; break;
+    case 166:
+        if (@available(iOS 17.0, macOS 14.0, *))
+            [e setVertexBufferOffset:(NSUInteger)U64(4) attributeStride:(NSUInteger)U64(12) atIndex:U32(0)];
+        else
+            [e setVertexBufferOffset:(NSUInteger)U64(4) atIndex:U32(0)];
+        break;
     case 101: {
         float c[4];
         memcpy(c, r.p, sizeof c);
@@ -1811,19 +1821,25 @@ typedef struct {
     case 463: { /* heap: where the whole of it is */
         id<MTLHeap> h = obj;
         HvObject *ho = [self object:ref task:task];
-        uint64_t a = ho && ho->heap_whole ? ho->heap_whole.gpuAddress : 0;
+        uint64_t a = 0;
+        if (@available(iOS 16.0, macOS 13.0, *)) a = ho && ho->heap_whole ? ho->heap_whole.gpuAddress : 0;
         (void)h;
         memcpy(out, &a, 8);
         break;
     }
     case 461: { /* buffer */
-        uint64_t a = [(id<MTLBuffer>)obj gpuAddress];
+        uint64_t a = 0;
+        if (@available(iOS 16.0, macOS 13.0, *)) a = [(id<MTLBuffer>)obj gpuAddress];
         memcpy(out, &a, 8);
         break;
     }
     case 462: case 464: case 466: case 467: case 468: { /* texture, sampler, render, compute, depth-stencil */
-        MTLResourceID id_ = ((MTLResourceID (*)(id, SEL))objc_msgSend)(obj, @selector(gpuResourceID));
-        memcpy(out, &id_, 8);
+        if (@available(iOS 16.0, macOS 13.0, *)) {
+            MTLResourceID id_ = ((MTLResourceID (*)(id, SEL))objc_msgSend)(obj, @selector(gpuResourceID));
+            memcpy(out, &id_, 8);
+        } else {
+            memset(out, 0, 8); /* iOS 15 has no GPU resource IDs */
+        }
         memcpy(out + 8, &index, 8);
         break;
     }
