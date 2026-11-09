@@ -4,7 +4,9 @@
    server for this machine's ECID, then the restore OS writes the disk) runs
    over that link. The restore tools are the open-source libirecovery,
    usbmuxd and idevicerestore, unmodified apart from the boot-ROM exploit left
-   out, talking to the guest through host/libusb_shim.c. Nothing of Apple's is
+   out and its boot waits lengthened for the emulated Mac (see the comments in
+   third_party/idevicerestore/src/recovery.c and restore.c), talking to the
+   guest through host/libusb_shim.c. Nothing of Apple's is
    decrypted or patched here: encrypted images go to the guest as they are, and
    the restore OS asks for its keys itself (the host just fetches the URL). */
 

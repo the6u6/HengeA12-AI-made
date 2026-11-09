@@ -363,7 +363,9 @@ int restore_reboot(struct idevicerestore_client_t* client)
 
 	restored_client_free(client->restore->client);
 
-	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 30000);
+	/* Five minutes, not upstream's thirty seconds: the emulated Mac's restore OS takes
+	   longer to shut down and disconnect than a real iPhone's. */
+	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 300000);
 	if (client->mode == MODE_RESTORE) {
 		mutex_unlock(&client->device_event_mutex);
 		return -1;

@@ -708,7 +708,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 			// we need to refresh the current mode again
 			mutex_lock(&client->device_event_mutex);
-			cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
+			/* Five minutes, not upstream's one: the emulated Mac reboots slowly. */
+			cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 300000);
 			if (client->mode == MODE_UNKNOWN || (client->flags & FLAG_QUIT)) {
 				mutex_unlock(&client->device_event_mutex);
 				logger(LL_ERROR, "Unable to discover device mode. Please make sure a device is attached.\n");

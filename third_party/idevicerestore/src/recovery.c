@@ -239,7 +239,11 @@ int recovery_enter_restore(struct idevicerestore_client_t* client, plist_t build
 	}
 
 	logger(LL_DEBUG, "Waiting for device to disconnect...\n");
-	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 30000);
+	/* Five minutes, not upstream's thirty seconds: inside Henge the "device" is an emulated
+	   A13 Mac whose restore kernel boots from guest RAM that iOS pages in on demand, and it
+	   takes minutes to take over from iBoot and re-enumerate. Timing out here reports
+	   "Failed to place device in restore mode" while the guest is still starting up. */
+	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 300000);
 	if (client->mode == MODE_RECOVERY || (client->flags & FLAG_QUIT)) {
 		mutex_unlock(&client->device_event_mutex);
 		logger(LL_ERROR, "Failed to place device in restore mode\n");

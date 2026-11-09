@@ -38,6 +38,11 @@ Every change keeps its original author in the git history.
   by a file so iOS can drop pages, the whole guest is no longer prefaulted at once, and the code
   region is 512 MB on 3/4 GB phones. The install logs process memory every 10 s, and iOS's memory
   warnings, so a memory kill can be told from a crash.
+- **Restore-mode timeout.** idevicerestore waits 30 seconds for the device to leave recovery mode
+  after the kernelcache is sent, and the emulated Mac's restore kernel can take minutes to boot
+  when its RAM is paged in on demand (which the smaller restore above needs). The install then
+  failed with "Failed to place device in restore mode" while the guest was still starting. That
+  wait, the restore-reboot wait and the restore-mode reboot wait are now five minutes.
 - CI takes the prebuilt iOS libraries from [Husk 15](https://github.com/the6u6/Husk15-AI-made),
   built against an iOS 14 floor.
 
